@@ -44,8 +44,13 @@ sudo pacman -S --needed base-devel git linux-aarch64-headers dkms
 - **flclash-bin** 的 aarch64 支持为本仓库新增（AUR 原版仅 x86_64）：官方 arm64 deb + 官方 SHA256SUMS 校验；`libquickjs_c_bridge_plugin.so` 仅 x86_64 提供（AUR 维护者的二进制补丁），arm64 缺省不影响主体功能。
 - **obsidian / flclash-bin 安装后即生效；linux-aarch64-rt 需要重启**（GRUB 菜单选 `Arch Linux, with Linux linux-aarch64-rt`）。
 - **cix-npu-driver 的分支选型**（在 Orion O6 / SKY1 EDK2 固件 / UEFI+ACPI 启动 / ALARM 主线内核 7.3.6 上实测）：上游 `cix_k6.6.89_*` 与 `cix_p1_k6.6_master` 只服务 CIX 自家 6.6.89 下游内核；`cix_mainline_upstream_dev`（tag `p1_7.0_v6.2.0`）的 `sky1.c` 同时带 ACPI HID `CIXH4000`（`_SB_.NPU0`）匹配和 ≥7.0 内核的 API 适配（`pm_runtime_put` 返回 void），是主线内核**唯一可用**的分支；`cix_mainline_dev` 的驱动代码与它完全一致，只多了 Debian 打包目录。
-- **cix-npu-driver 为什么关掉 devfreq**：O6 的 EDK2 固件在 ACPI 表里**没有描述 SCMI 设备**（22 个 `PRP0001` 节点全是 DDR ctrl / ramoops / regulator / LED），主线内核上 `/sys/bus/scmi_protocol/devices` 为空；而驱动的 devfreq 初始化依赖 SCMI perf 域并把失败当致命错误。因此包内 `dkms.conf` 以 `BUILD_NPU_DEVFREQ=n` 覆盖上游，NPU 核心跑固件默认时钟。
-- **cix-npu-driver 安装后即生效**：模块带 `acpi:CIXH4000` alias，udev 按 modalias 开机自动加载（已用 `udevadm trigger` 实测），不需要 `modules-load.d`；设备节点 `/dev/aipu`（misc 10:258）权限 0666。验证：`dkms status` / `lsmod | grep aipu` / `ls -l /dev/aipu` / `dmesg | grep -i aipu`。sysfs 接口在 `/sys/devices/platform/CIXH4000:00/{ext_registers,gm_policy,wakeup}`。
+- **cix-npu-driver 为什么关掉 devfreq**：O6 的 EDK2 固件在 ACPI 表里**没有描述 SCMI 设备**（22 个 `PRP0001` 节点全是 DDR ctrl / ramoops / regulator / LED），主线内核上 `/sys/bus/scmi_protocol/devices` 为空；而驱动的 devfreq 初始化依赖 SCMI perf 域并把失败当致命错误。因此包内 `dkms.conf` 以 `BUILD_NPU_DEVFREQ=n` 覆盖上游，NPU 核心跑固件默认时钟。CIX 官方 PPA 手册（开源驱动版）对此有明确说明：内核 7.0 需要在 BIOS 里开启 `Device Manager → Platform Configuration → Compliance Configuration → Enable ACPI SCMI`；开启后 ACPI 表里会出现 SCMI 设备，届时可把 `dkms.conf` 改回 `BUILD_NPU_DEVFREQ=y` 获得 devfreq/DVFS。本包默认按关闭状态处理，两种 BIOS 配置下都能加载。
+- **cix-npu-driver 安装后即生效**：模块带 `acpi:CIXH4000` alias，udev 按 modalias 开机自动加载（已用 `udevadm trigger` 实测），不需要 `modules-load.d`；设备节点 `/dev/aipu`（misc 10:258）权限 0666。sysfs 接口在 `/sys/devices/platform/CIXH4000:00/{ext_registers,gm_policy,wakeup}`。
+- **cix-npu-driver 验收**：`dkms status` 显示 `installed`；`dmesg | grep -i aipu` 应有 `AIPU detected: zhouyi-v3` 与 `Core Count per Cluster: 3`；用户态冒烟测试 `aipu-cap.c`（本目录，依赖 `cix-npu-uapi-headers`）以普通用户 `open /dev/aipu` + `AIPU_IOCTL_QUERY_CAP` 走通 ioctl 链路，并在 dmesg 触发 `en_core_cnt 3`（runtime PM 唤醒）/ 空闲后自动挂起：
+
+  ```bash
+  gcc -O2 -Wall -o /tmp/aipu-cap aarch64-pkgbuilds/cix-npu-driver/aipu-cap.c && /tmp/aipu-cap
+  ```
 - **cix-npu-driver 的上游同步**：`https://github.com/HougeLangley/cix_opensource__npu_driver` fork 的 7 条分支与 `cixtech` 上游逐 SHA 对齐（`cix_mainline_dev` 顶部保留本仓库的 COPR/RPM 打包提交），升级时改 PKGBUILD 里的 `_tag` 即可。
 
 ## 自动更新

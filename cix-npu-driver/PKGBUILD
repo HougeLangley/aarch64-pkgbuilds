@@ -28,7 +28,7 @@ _tag='p1_7.0_v6.2.0'
 source=("git+https://github.com/HougeLangley/cix_opensource__npu_driver.git#tag=${_tag}"
         'dkms.conf')
 sha256sums=('SKIP'
-            '464c8466becdad1f914e0ab9bb1bff598ecc25eba4c66da937282f554865a2d9')
+            '524f9abcdecdeb03b80bea3305b19623cfd3edd1cc552caf4644a344b9308de9')
 
 _dkms_tree="usr/src/aipu-${pkgver}"
 
