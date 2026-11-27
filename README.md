@@ -12,6 +12,7 @@ OrionO6 (Arch Linux ARM, aarch64) 自维护软件包集合。每个子目录以*
 | `obsidian` (appimage) | 1.13.7-1 | Obsidian 笔记软件（arm64 AppImage 版），desktop 文件名自动探测 | 跟随 GitHub releases（跳过移动-only 发布） |
 | `flclash-bin` | 0.8.96-1 | FlClash 代理客户端（aarch64 启用），quickjs 桥接仅 x86_64 | 跟随 GitHub releases |
 | `cix-npu-driver` (`-dkms` + `-uapi-headers`) | 6.2.0-2 | Orion O6 NPU（ArmChina Zhouyi Z3，3 核 × 4 TEC）内核驱动 `aipu.ko`，DKMS 随内核自动重编；源码取自 fork 的 tag `p1_7.0_v6.2.0`（= 上游 `cix_mainline_upstream_dev`） | 跟随上游 `cix_mainline_upstream_dev` 分支 / tag |
+| `sky1-zhouyi-v3-driver-dkms` | 6.2.0-1 | Orion O6 NPU 内核驱动 `aipu.ko`，源码取自 Reonarudo fork `sky1-zhouyi-v3-driver`（CIX 6.2.0-1 + job 完成规则/中断掩码修复 + WBUF/SLOT 零拷贝 ioctl），修复原版驱动上 tinygrad ZHOUYI 后端 job 挂起；DKMS 树名 `zhouyi-aipu`；含 devfreq 可选补丁（`BUILD_NPU_DEVFREQ=n`） | 跟随 fork commit（`_fork`） |
 
 ## 使用方式
 
@@ -21,7 +22,7 @@ OrionO6 (Arch Linux ARM, aarch64) 自维护软件包集合。每个子目录以*
 
 ```bash
 git clone https://github.com/HougeLangley/aarch64-pkgbuilds.git
-cd aarch64-pkgbuilds/linux-aarch64-rt   # 或 obsidian / flclash-bin / cix-npu-driver
+cd aarch64-pkgbuilds/linux-aarch64-rt   # 或 obsidian / flclash-bin / cix-npu-driver / sky1-zhouyi-v3-driver
 makepkg -si
 ```
 
@@ -32,7 +33,7 @@ makepkg -si
 sudo pacman -S --needed base-devel clang llvm lld pahole xmlto docbook-xsl kmod inetutils bc git dtc python
 # obsidian / flclash-bin（二进制重打包，秒级）
 sudo pacman -S --needed base-devel
-# cix-npu-driver（DKMS 源码包，打包秒级；dkms 在 pacman hook 里编译模块，约 1 分钟）
+# cix-npu-driver / sky1-zhouyi-v3-driver（DKMS 源码包，打包秒级；dkms 在 pacman hook 里编译模块，约 1 分钟）
 sudo pacman -S --needed base-devel git linux-aarch64-headers dkms
 ```
 
@@ -52,6 +53,9 @@ sudo pacman -S --needed base-devel git linux-aarch64-headers dkms
   gcc -O2 -Wall -o /tmp/aipu-cap aarch64-pkgbuilds/cix-npu-driver/aipu-cap.c && /tmp/aipu-cap
   ```
 - **cix-npu-driver 的上游同步**：`https://github.com/HougeLangley/cix_opensource__npu_driver` fork 的 7 条分支与 `cixtech` 上游逐 SHA 对齐（`cix_mainline_dev` 顶部保留本仓库的 COPR/RPM 打包提交），升级时改 PKGBUILD 里的 `_tag` 即可。
+- **sky1-zhouyi-v3-driver-dkms 为什么存在**：CIX 原版驱动（`cix-npu-driver-dkms`，上游 tag `p1_7.0_v6.2.0`）在本板上跑 tinygrad ZHOUYI 后端的 job 会**挂起超时**（实测，内核 7.3.6-1-aarch64-ARCH）；Reonarudo fork `sky1-zhouyi-v3-driver`（CIX 6.2.0-1 + job 完成规则 / 中断掩码修复 + job 超时上报 + WBUF/SLOT 零拷贝 ioctl）跑同样的任务能正常完成，且在本内核零错误编译。包内固定 fork commit `9edd06b`（PKGBUILD 的 `_fork` 与 `source` 里的 commit），升级时两处一起改。
+- **sky1-zhouyi-v3-driver-dkms 与 `cix-npu-driver-dkms` 互斥**：两者都产出 `aipu.ko` 并安装 `/usr/include/misc/armchina_aipu.h`，因此同时 `conflicts`/`provides` `cix-npu-driver-dkms` 与 `cix-npu-uapi-headers`，`pacman -U` 会先卸下原版，再由 dkms hook 编译安装 `zhouyi-aipu/6.2.0.r9edd06b`。DKMS 树名按 tinygrad ZHOUYI 后端的约定取 `zhouyi-aipu`（它在 `/usr/src/zhouyi-aipu-<version>/include/armchina_aipu.h` 找驱动 UAPI 头），包内在该路径额外放一份头；Makefile 与源码按 dkms 要求放在树根。
+- **sky1-zhouyi-v3-driver-dkms 的 devfreq 补丁**：fork 把 devfreq 做成无条件开启，而 O6 固件 ACPI 表无 SCMI 设备（见上面 cix-npu-driver 的说明），devfreq 初始化失败会让 probe 走不到底。包内 `0001-sky1-make-devfreq-optional-BUILD_NPU_DEVFREQ.patch`（quilt 格式，`prepare()` 里 `patch -p1`）把 devfreq 代码包进 `CONFIG_ENABLE_DEVFREQ`，Makefile 仅在 `BUILD_NPU_DEVFREQ != n` 时定义该宏；`dkms.conf` 以 `BUILD_NPU_DEVFREQ=n` 构建。另：`dkms.conf` 不写 `CLEAN=`，dkms 3.4.5 已把它标记为 deprecated。
 
 ## 自动更新
 

@@ -1,0 +1,95 @@
+# Maintainer: HougeLangley <hougelangley1987@gmail.com>
+
+# CIX Orion O6 NPU (ArmChina Zhouyi Z3, 3 cores x 4 TEC) out-of-tree kernel driver,
+# DKMS-packaged for Arch Linux ARM (stock linux-aarch64 kernel). This is the
+# Reonarudo fork sky1-zhouyi-v3-driver, not the CIX original that
+# cix-npu-driver-dkms (sibling package in this repo) ships.
+#
+# Why the fork (verified on Orion O6, SKY1 EDK2 firmware, UEFI+ACPI boot,
+# kernel 7.3.6-1-aarch64-ARCH): with the CIX original driver
+# (cix_mainline_upstream_dev, tag p1_7.0_v6.2.0) the tinygrad ZHOUYI
+# backend's jobs hang and time out. The fork is CIX 6.2.0-1 plus fixes for
+# the job-completion rule and the command-pool interrupt mask (restored after
+# runtime resume), a job deadline, and a zero-copy WBUF/SLOT ioctl path
+# (AIPU_IOCTL_WBUF_ALLOC / WBUF_FREE / SLOT_ALLOC / SLOT_FREE / SLOT_MAP);
+# the same tinygrad jobs complete normally with it. It builds with zero
+# errors on this kernel.
+#
+# Why the devfreq patch (0001-sky1-make-devfreq-optional-BUILD_NPU_DEVFREQ.patch,
+# quilt format, applied with -p1 in prepare()): the fork enables devfreq
+# unconditionally, but the O6 firmware's ACPI tables describe no SCMI device
+# (see dkms.conf). The driver's devfreq init attaches an SCMI perf power
+# domain and treats failure as fatal, so probe would never complete. The
+# patch wraps the devfreq code in CONFIG_ENABLE_DEVFREQ and has the Makefile
+# define it only when BUILD_NPU_DEVFREQ != n; the package's dkms.conf builds
+# with BUILD_NPU_DEVFREQ=n.
+#
+# Why the DKMS tree is named zhouyi-aipu: the tinygrad ZHOUYI backend looks
+# the driver UAPI header up at /usr/src/zhouyi-aipu-<version>/include/armchina_aipu.h.
+# The package therefore installs the tree as /usr/src/zhouyi-aipu-${_dkmver}/
+# (Makefile + sources at the tree root, as dkms needs) and puts an extra
+# copy of the header at include/armchina_aipu.h inside it. Module building
+# itself is wired through the Arch dkms pacman hooks (70-dkms-install.hook /
+# 71-dkms-remove.hook), so no .install scriptlet is needed: installing the
+# package builds and installs aipu.ko for every kernel that has
+# linux-*-headers (build dir) present.
+#
+# Boot-time loading: aipu.ko exposes the modalias alias "acpi:CIXH4000", so
+# udev autoloads it as soon as the _SB_.NPU0 platform device is enumerated. The
+# package additionally ships /usr/lib/modules-load.d/aipu.conf to make that
+# explicit through systemd-modules-load (package-owned path; /etc/modules-load.d
+# stays free for admin overrides).
+#
+# Both packages build the same aipu.ko and install the same UAPI header, so
+# this package conflicts with / provides cix-npu-driver-dkms and
+# cix-npu-uapi-headers; switching is a plain pacman -U.
+
+pkgname=sky1-zhouyi-v3-driver-dkms
+pkgver=6.2.0
+pkgrel=1
+pkgdesc="CIX Orion O6 NPU (ArmChina Zhouyi Z3) kernel module aipu.ko - Reonarudo sky1-zhouyi-v3-driver fork (job completion / interrupt mask fixes, zero-copy WBUF/SLOT), DKMS sources"
+arch=('aarch64')
+url="https://github.com/Reonarudo/sky1-zhouyi-v3-driver"
+license=('GPL-2.0-only')
+makedepends=('git')
+depends=('dkms' 'linux-aarch64-headers')
+conflicts=('cix-npu-driver-dkms' 'cix-npu-uapi-headers')
+provides=('cix-npu-driver-dkms' 'cix-npu-uapi-headers')
+_fork=9edd06b
+_dkmver="${pkgver}.r${_fork}"
+_srcname=sky1-zhouyi-v3-driver
+_dkms_tree="usr/src/zhouyi-aipu-${_dkmver}"
+source=("git+https://github.com/Reonarudo/sky1-zhouyi-v3-driver.git#commit=9edd06b66cb6195d35b99de0c65dd9919a70aca2"
+        '0001-sky1-make-devfreq-optional-BUILD_NPU_DEVFREQ.patch'
+        'dkms.conf'
+        'aipu.conf')
+sha256sums=('SKIP'
+            '2a707d54d06d4ab57f3418b1e9e275750b40798004694c98e4a00259d49ac8ea'
+            'e54115f312a193110ca900dbba072cb30fa59c8fcc6a4ccc81eda626bf48f9ef'
+            '5fa425340400f6f45e7ace8486d501ff3818223cd52df25243a05552cb1a3b81')
+
+prepare() {
+    cd "${_srcname}"
+    patch -p1 --no-backup-if-mismatch -i "${srcdir}/0001-sky1-make-devfreq-optional-BUILD_NPU_DEVFREQ.patch"
+}
+
+package() {
+    local _uapi_h="${srcdir}/${_srcname}/driver/armchina-npu/include/armchina_aipu.h"
+
+    # 1) fork driver tree contents at the DKMS tree root (Makefile must be at
+    #    the root for the kernel kbuild M= build); includes the fork's own
+    #    dkms.conf, replaced in step 3
+    install -d "${pkgdir}/${_dkms_tree}"
+    cp -a "${srcdir}/${_srcname}/driver/." "${pkgdir}/${_dkms_tree}/"
+    # 2) extra copy of the UAPI header where the tinygrad ZHOUYI backend
+    #    expects it (<tree>/include/armchina_aipu.h)
+    install -Dm644 "${_uapi_h}" "${pkgdir}/${_dkms_tree}/include/armchina_aipu.h"
+    # 3) Arch dkms.conf: zhouyi-aipu tree name, #DKMVER# -> 6.2.0.r9edd06b,
+    #    BUILD_NPU_DEVFREQ=n (no SCMI device in the O6 ACPI tables), no CLEAN=
+    sed -e "s|#DKMVER#|${_dkmver}|" "${srcdir}/dkms.conf" \
+        | install -Dm644 /dev/stdin "${pkgdir}/${_dkms_tree}/dkms.conf"
+    # 4) UAPI header (fork version: WBUF/SLOT ioctls) for user space
+    install -Dm644 "${_uapi_h}" "${pkgdir}/usr/include/misc/armchina_aipu.h"
+    # 5) explicit boot-time load (udev modalias autoload still applies)
+    install -Dm644 aipu.conf "${pkgdir}/usr/lib/modules-load.d/aipu.conf"
+}
