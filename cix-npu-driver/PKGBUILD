@@ -15,20 +15,28 @@
 # Arch dkms pacman hooks (70-dkms-install.hook / 71-dkms-remove.hook), so no
 # .install scriptlet is needed: installing the package builds and installs
 # aipu.ko for every kernel that has linux-*-headers (build dir) present.
+#
+# Boot-time loading: aipu.ko exposes the modalias alias "acpi*:CIXH4000:*", so
+# udev autoloads it as soon as the _SB_.NPU0 platform device is enumerated. The
+# package additionally ships /usr/lib/modules-load.d/aipu.conf to make that
+# explicit through systemd-modules-load (package-owned path; /etc/modules-load.d
+# stays free for admin overrides).
 
 pkgbase=cix-npu-driver
 pkgname=('cix-npu-driver-dkms' 'cix-npu-uapi-headers')
 pkgver=6.2.0
-pkgrel=1
+pkgrel=2
 arch=('aarch64')
 url="https://github.com/cixtech/cix_opensource__npu_driver"
 license=('GPL-2.0-only')
 makedepends=('git')
 _tag='p1_7.0_v6.2.0'
 source=("git+https://github.com/HougeLangley/cix_opensource__npu_driver.git#tag=${_tag}"
-        'dkms.conf')
+        'dkms.conf'
+        'aipu.conf')
 sha256sums=('SKIP'
-            '524f9abcdecdeb03b80bea3305b19623cfd3edd1cc552caf4644a344b9308de9')
+            '524f9abcdecdeb03b80bea3305b19623cfd3edd1cc552caf4644a344b9308de9'
+            'c62fff98f8d5b0d7a1a333e33a871bbf27255da3bf501b7b98a6e5c965f7d7e9')
 
 _dkms_tree="usr/src/aipu-${pkgver}"
 
@@ -41,6 +49,8 @@ package_cix-npu-driver-dkms() {
     cp -a "${srcdir}/cix_opensource__npu_driver/driver/." "${pkgdir}/${_dkms_tree}/"
     # 2) Arch override: BUILD_NPU_DEVFREQ=n (no SCMI device in the O6 ACPI tables)
     install -Dm644 dkms.conf "${pkgdir}/${_dkms_tree}/dkms.conf"
+    # 3) explicit boot-time load (udev modalias autoload still applies)
+    install -Dm644 aipu.conf "${pkgdir}/usr/lib/modules-load.d/aipu.conf"
 }
 
 package_cix-npu-uapi-headers() {
