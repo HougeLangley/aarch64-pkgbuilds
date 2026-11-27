@@ -1,0 +1,52 @@
+# Maintainer: HougeLangley <hougelangley1987@gmail.com>
+
+# CIX Orion O6 NPU (ArmChina Zhouyi Z3, 3 cores x 4 TEC) out-of-tree kernel driver,
+# DKMS-packaged for Arch Linux ARM (stock linux-aarch64 kernel).
+#
+# Upstream branch selection (verified on Orion O6, SKY1 EDK2 firmware, UEFI+ACPI boot):
+#   cix_mainline_upstream_dev == tag p1_7.0_v6.2.0 is the only upstream branch whose
+#   sky1.c carries the ACPI match { "CIXH4000" } for the _SB_.NPU0 platform device
+#   AND the >= 7.0 kernel adaptations (void pm_runtime_put). cix_k6.6.89_* and
+#   cix_p1_k6.6_master target CIX's downstream 6.6.89 vendor kernel only;
+#   cix_mainline_dev is identical driver code plus Debian packaging.
+#
+# Source is the maintained fork (all branches mirror upstream); the tag pins the
+# commit 93a0698fc00d848afefc8e33022d2a2878663677. Build is wired through the
+# Arch dkms pacman hooks (70-dkms-install.hook / 71-dkms-remove.hook), so no
+# .install scriptlet is needed: installing the package builds and installs
+# aipu.ko for every kernel that has linux-*-headers (build dir) present.
+
+pkgbase=cix-npu-driver
+pkgname=('cix-npu-driver-dkms' 'cix-npu-uapi-headers')
+pkgver=6.2.0
+pkgrel=1
+arch=('aarch64')
+url="https://github.com/cixtech/cix_opensource__npu_driver"
+license=('GPL-2.0-only')
+makedepends=('git')
+_tag='p1_7.0_v6.2.0'
+source=("git+https://github.com/HougeLangley/cix_opensource__npu_driver.git#tag=${_tag}"
+        'dkms.conf')
+sha256sums=('SKIP'
+            '464c8466becdad1f914e0ab9bb1bff598ecc25eba4c66da937282f554865a2d9')
+
+_dkms_tree="usr/src/aipu-${pkgver}"
+
+package_cix-npu-driver-dkms() {
+    pkgdesc="CIX Orion O6 NPU (ArmChina Zhouyi Z3) kernel module aipu.ko - DKMS sources"
+    depends=('dkms' 'linux-aarch64-headers')
+
+    # 1) upstream driver tree (Makefile, armchina-npu/, version.mk, upstream dkms.conf)
+    install -d "${pkgdir}/${_dkms_tree}"
+    cp -a "${srcdir}/cix_opensource__npu_driver/driver/." "${pkgdir}/${_dkms_tree}/"
+    # 2) Arch override: BUILD_NPU_DEVFREQ=n (no SCMI device in the O6 ACPI tables)
+    install -Dm644 dkms.conf "${pkgdir}/${_dkms_tree}/dkms.conf"
+}
+
+package_cix-npu-uapi-headers() {
+    pkgdesc="UAPI header (misc/armchina_aipu.h) for the CIX Orion O6 NPU ioctl interface"
+    arch=('any')
+
+    install -Dm644 "${srcdir}/cix_opensource__npu_driver/driver/armchina-npu/include/armchina_aipu.h" \
+        "${pkgdir}/usr/include/misc/armchina_aipu.h"
+}
