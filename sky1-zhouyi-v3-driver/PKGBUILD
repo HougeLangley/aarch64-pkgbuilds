@@ -15,14 +15,11 @@
 # the same tinygrad jobs complete normally with it. It builds with zero
 # errors on this kernel.
 #
-# Why the devfreq patch (0001-sky1-make-devfreq-optional-BUILD_NPU_DEVFREQ.patch,
-# quilt format, applied with -p1 in prepare()): the fork enables devfreq
-# unconditionally, but the O6 firmware's ACPI tables describe no SCMI device
-# (see dkms.conf). The driver's devfreq init attaches an SCMI perf power
-# domain and treats failure as fatal, so probe would never complete. The
-# patch wraps the devfreq code in CONFIG_ENABLE_DEVFREQ and has the Makefile
-# define it only when BUILD_NPU_DEVFREQ != n; the package's dkms.conf builds
-# with BUILD_NPU_DEVFREQ=n.
+# devfreq: the O6 firmware's ACPI tables describe no SCMI device, so there is no
+# devfreq perf domain and the NPU runs at the firmware's clock. Since fork commit
+# 85db667 the driver treats devfreq as optional at run time ("devfreq unavailable
+# ... continuing without it"); pkgrel 1 carried a local build-time patch for that
+# (0001-sky1-make-devfreq-optional, superseded and removed in pkgrel 2).
 #
 # Why the DKMS tree is named zhouyi-aipu: the tinygrad ZHOUYI backend looks
 # the driver UAPI header up at /usr/src/zhouyi-aipu-<version>/include/armchina_aipu.h.
@@ -46,7 +43,7 @@
 
 pkgname=sky1-zhouyi-v3-driver-dkms
 pkgver=6.2.0
-pkgrel=1
+pkgrel=2
 pkgdesc="CIX Orion O6 NPU (ArmChina Zhouyi Z3) kernel module aipu.ko - Reonarudo sky1-zhouyi-v3-driver fork (job completion / interrupt mask fixes, zero-copy WBUF/SLOT), DKMS sources"
 arch=('aarch64')
 url="https://github.com/Reonarudo/sky1-zhouyi-v3-driver"
@@ -55,23 +52,16 @@ makedepends=('git')
 depends=('dkms' 'linux-aarch64-headers')
 conflicts=('cix-npu-driver-dkms' 'cix-npu-uapi-headers')
 provides=('cix-npu-driver-dkms' 'cix-npu-uapi-headers')
-_fork=9edd06b
+_fork=f91f8dd
 _dkmver="${pkgver}.r${_fork}"
 _srcname=sky1-zhouyi-v3-driver
 _dkms_tree="usr/src/zhouyi-aipu-${_dkmver}"
-source=("git+https://github.com/Reonarudo/sky1-zhouyi-v3-driver.git#commit=9edd06b66cb6195d35b99de0c65dd9919a70aca2"
-        '0001-sky1-make-devfreq-optional-BUILD_NPU_DEVFREQ.patch'
+source=("git+https://github.com/Reonarudo/sky1-zhouyi-v3-driver.git#commit=f91f8dd"
         'dkms.conf'
         'aipu.conf')
 sha256sums=('SKIP'
-            '2a707d54d06d4ab57f3418b1e9e275750b40798004694c98e4a00259d49ac8ea'
-            'e54115f312a193110ca900dbba072cb30fa59c8fcc6a4ccc81eda626bf48f9ef'
+            'b094dfb5ff51d70459a324af7ece0a445db56753571871514e694568c0257ee0'
             '5fa425340400f6f45e7ace8486d501ff3818223cd52df25243a05552cb1a3b81')
-
-prepare() {
-    cd "${_srcname}"
-    patch -p1 --no-backup-if-mismatch -i "${srcdir}/0001-sky1-make-devfreq-optional-BUILD_NPU_DEVFREQ.patch"
-}
 
 package() {
     local _uapi_h="${srcdir}/${_srcname}/driver/armchina-npu/include/armchina_aipu.h"
@@ -84,8 +74,8 @@ package() {
     # 2) extra copy of the UAPI header where the tinygrad ZHOUYI backend
     #    expects it (<tree>/include/armchina_aipu.h)
     install -Dm644 "${_uapi_h}" "${pkgdir}/${_dkms_tree}/include/armchina_aipu.h"
-    # 3) Arch dkms.conf: zhouyi-aipu tree name, #DKMVER# -> 6.2.0.r9edd06b,
-    #    BUILD_NPU_DEVFREQ=n (no SCMI device in the O6 ACPI tables), no CLEAN=
+    # 3) Arch dkms.conf: zhouyi-aipu tree name, #DKMVER# -> 6.2.0.r<fork commit>, no CLEAN=.
+    #    devfreq is optional at run time since fork 85db667 (no SCMI perf domain on the O6 -> loads anyway).
     sed -e "s|#DKMVER#|${_dkmver}|" "${srcdir}/dkms.conf" \
         | install -Dm644 /dev/stdin "${pkgdir}/${_dkms_tree}/dkms.conf"
     # 4) UAPI header (fork version: WBUF/SLOT ioctls) for user space

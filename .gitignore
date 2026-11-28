@@ -1,0 +1,9 @@
+# makepkg artifacts
+pkg/
+src/
+*.pkg.tar.*
+*.pkg.tar
+!PKGBUILD
+# makepkg clones the source repo into a directory named after the source
+sky1-zhouyi-v3-driver/sky1-zhouyi-v3-driver/
+cix-npu-driver/cix_opensource__npu_driver/

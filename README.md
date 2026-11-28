@@ -75,3 +75,8 @@ sudo pacman -S --needed base-devel git linux-aarch64-headers dkms
 ## License
 
 各包遵循其上游项目的 license（PKGBUILD 内声明）。
+
+## 2026-11-28 更新：驱动 pkgrel 2（fork f91f8dd）
+
+- `sky1-zhouyi-v3-driver-dkms 6.2.0-2`：pin 到 fork `f91f8dd`，**删除本地 devfreq 补丁**（fork `85db667` 起运行时可选：`devfreq unavailable (-17), continuing without it`），dkms.conf 不再传 `BUILD_NPU_DEVFREQ`。已在 7.3.6 上重建、重载并用 tinygrad ZHOUYI 探测验证（PROBE_OK）。
+- 新增 `sky1-zhouyi-v3-driver/npu-driver-check.sh`（免 root 健康检查，`--upstream` 查 fork 新提交）与 `NPU-DRIVER-MAINTENANCE.md`（内核升级/故障/跟进上游/回滚手册）。
