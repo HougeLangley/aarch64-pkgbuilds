@@ -60,7 +60,7 @@ source=("git+https://github.com/Reonarudo/sky1-zhouyi-v3-driver.git#commit=f91f8
         'dkms.conf'
         'aipu.conf')
 sha256sums=('SKIP'
-            'b094dfb5ff51d70459a324af7ece0a445db56753571871514e694568c0257ee0'
+            '9405e0dc9780f3d8f989df168c36492b1f2a919b5dc10da83135447af065dc18'
             '5fa425340400f6f45e7ace8486d501ff3818223cd52df25243a05552cb1a3b81')
 
 package() {
